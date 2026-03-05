@@ -18,6 +18,10 @@ def load_data(market: str | None = None,
 
     df["datetime"] = pd.to_datetime(df["datetime"], format="%Y%m%d %H%M%S%f")
 
+    df = df.set_index("datetime")
+    
+    df.index = df.index.tz_localize("US/Eastern").tz_convert("UTC")
+    
     df["mid_price"] = (df["bid"] + df["ask"]) / 2
 
     return df
