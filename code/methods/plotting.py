@@ -1,0 +1,1 @@
+## Implement method for nice plots in universal style

@@ -228,4 +228,5 @@ pyrightconfig.json
 # End of https://www.toptal.com/developers/gitignore/api/visualstudiocode,python,macos
 
 # Gitignore for large files: 
-oblig/data/
+oblig/data/*
+!oblig/data/README.md
