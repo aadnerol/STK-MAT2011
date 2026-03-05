@@ -230,3 +230,4 @@ pyrightconfig.json
 # Gitignore for large files: 
 oblig/data/*
 !oblig/data/README.md
+code/data/raw_data
