@@ -149,8 +149,29 @@ def forward_algorithm(y: np.ndarray,
     
     return alpha, c, loglik
  
-def neg_loglik (theta, y):
-    pass
+def neg_loglik (theta: np.ndarray, y: np.ndarray) -> float:
+    """Compute negative log-likelihood for optimization.
+
+    Args:
+        theta (np.ndarray): Unconstrained parameter vector.
+        y (np.ndarray): Observed time series.
+
+    Returns:
+        float: Negative log-likelihood.
+    """
+    beta1, beta2, sigma1, sigma2, p11, p22 = transform_params(theta)
+    
+    alpha_local, c_local, loglik = forward_algorithm(
+        y=y,
+        beta1=beta1,
+        beta2=beta2,
+        sigma1=sigma1,
+        sigma2=sigma2,
+        p11=p11,
+        p22=p22,
+        pi1=0.5
+    )
+    return -loglik
 
 def fit_model(y, theta):
     pass
