@@ -9,7 +9,8 @@ def simulate_rs_ar1(T: int,
                     sigma: np.ndarray, 
                     P: np.ndarray, 
                     seed: int = 42) -> tuple[np.ndarray, np.ndarray]:
-    """Generate a two-state regime-switching AR(1) process
+    """Generate a two-state regime-switching AR(1) process. Based on code 
+    provided by advisor.
 
     Args:
         T (int): Number of observations.
@@ -44,8 +45,33 @@ def simulate_rs_ar1(T: int,
     
 
 
-def transform_params (theta: np.ndarray) -> np.ndarray:
-    pass
+def transform_params(theta: np.ndarray) -> tuple:
+    """Transform unconstrained parameters.
+
+    Args:
+        theta (np.ndarray): Unconstrained parameter vector
+            [b1, b2, eta1, eta2, a1, a2]
+
+    Returns:
+        tuple: Transformed parameters
+            (beta1, beta2, sigma1, sigma2, p11, p22)
+    """
+    
+    b1, b2, eta1, eta2, a1, a2 = theta
+    
+    # AR coefficients (-1, 1)
+    beta1 = (1-np.exp(-b1)) / (1+np.exp(-b1))
+    beta2 = (1-np.exp(-b2)) / (1+np.exp(-b2))
+    
+    # Volatilities (>0)
+    sigma1 = np.exp(eta1)
+    sigma2 = np.exp(eta2)
+    
+    # Transition probabilites (0, 1)
+    p11 = 1 / (1 + np.exp(-a1))
+    p22 = 1 / (1 + np.exp(-a2))
+    
+    return beta1, beta2, sigma1, sigma2, p11, p22
 
 def obs_density (y_t, y_tm1, beta, sigma):
     pass
