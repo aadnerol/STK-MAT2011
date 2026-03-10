@@ -77,8 +77,8 @@ def compute_returns(df: pd.DataFrame, column: str = "pre_avg") -> pd.DataFrame:
     Compute returns from chosen column.
     """
     df = df.copy()
-    df["r"] = np.log(df[column]).diff()
-    df = df.dropna(subset=["r"]).reset_index(drop=True)
+    df["r"] = df[column].diff()
+    df = df.dropna(subset=["r"])
     return df
 
 def filter_day(df: pd.DataFrame, day: str) -> pd.DataFrame:
