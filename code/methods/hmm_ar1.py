@@ -91,9 +91,64 @@ def obs_density(y_t: float,
     return 1 / (np.sqrt(2 * np.pi * sigma**2)) * \
         np.exp(- (y_t - beta*y_tm1)**2 / (2 * sigma**2))
 
-def forward_algorithm(y, beta1, beta2, sigma1, sigma2, p11, p22, pi1):
-    pass
+def forward_algorithm(y: np.ndarray, 
+                      beta1: float, 
+                      beta2: float, 
+                      sigma1: float, 
+                      sigma2: float, 
+                      p11: float, 
+                      p22: float, 
+                      pi1: float = 0.5):
+    """Compute scaled forward probabilities and log-likelihood
 
+    Args:
+        y (np.ndarray): Observed time series.
+        beta1 (float): AR coefficient in state 0.
+        beta2 (float): AR coefficient in state 1.
+        sigma1 (float): Innovation std. deviation in state 0.
+        sigma2 (float): Innovation std. deviation in state 1.
+        p11 (float): Probability of staying in state 0.
+        p22 (float): Probability of staying in state 1. 
+        pi1 (float, optional): Initial probability of state 0. Defaults to 0.5.
+
+    Returns:
+        tuple[np.ndarray, np.ndarray, float]: Scaled forward probabilites, 
+        scaling factors, log-likelihood.
+    """
+    T = len(y)
+    
+    p12 = 1 - p11
+    p21 = 1 - p22
+    pi2 = 1 - pi1
+    
+    alpha = np.zeros((T, 2))
+    c = np.zeros(T)
+    
+    # Initial step
+    f1 = obs_density(y[0], 0.0, beta1, sigma1)
+    f2 = obs_density(y[0], 0.0, beta2, sigma2)
+    
+    alpha[0, 0] = pi1 * f1
+    alpha[0, 1] = pi2 * f2
+    
+    c[0] = alpha[0, 0] + alpha[0, 1]
+    alpha[0, :] /= c[0]
+    
+    # Recursion
+    for t in range(1, T):
+        f1 = obs_density(y[t], y[t-1], beta1, sigma1)
+        f2 = obs_density(y[t], y[t-1], beta2, sigma2)
+        
+        alpha[t, 0] = (alpha[t-1, 0] * p11 + alpha[t-1, 1] * p21) * f1
+        alpha[t, 1] = (alpha[t-1, 0] * p12 + alpha[t-1, 1] * p22) * f2
+        
+        c[t] = alpha[t, 0] + alpha[t, 1]
+        alpha[t, :] /= c[t]
+    
+    loglik = np.sum(np.log(c))
+    
+    return alpha, c, loglik
+ 
 def neg_loglik (theta, y):
     pass
 
