@@ -1,11 +1,47 @@
 ### Implementation of HMM AR(1) model ###
-
+# Two states only #
 # Estimation with forward probabilites #
 
 import numpy as np
 
-def simulate_rs_ar1(T, beta, sigma, P, pi=None, seed = None):
-    pass
+def simulate_rs_ar1(T: int, 
+                    beta: np.ndarray, 
+                    sigma: np.ndarray, 
+                    P: np.ndarray, 
+                    seed: int = 42) -> tuple[np.ndarray, np.ndarray]:
+    """Generate a two-state regime-switching AR(1) process
+
+    Args:
+        T (int): Number of observations.
+        beta (np.ndarray): AR(1) coefficients for each state (length 2).
+        sigma (np.ndarray): Innovation standard deviations for each state (length 2).
+        P (np.ndarray): 2x2 transition matrix for hidden states.
+        seed (int, optional): Random seed. Defaults to 42.
+
+    Returns:
+        tuple[np.ndarray, np.ndarray]: Simulated observations y and hidden states.
+    """
+    # Set seed
+    np.random.seed(seed)
+    
+    states = np.zeros(T, dtype=int)
+    y = np.zeros(T)
+    
+    # Initial values:
+    states[0] = np.random.choice([0, 1])
+    y[0] = np.random.normal()
+    
+    for t in range(1, T):
+        
+        # Simulate next state
+        states[t] = np.random.choice([0, 1], p=P[states[t-1]])
+        
+        # Simulate observation
+        s = states[t]
+        y[t] = beta[s]*y[t-1] + np.random.normal(scale=sigma[s])
+    
+    return y, states
+    
 
 
 def transform_params (theta: np.ndarray) -> np.ndarray:
