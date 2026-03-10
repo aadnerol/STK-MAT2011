@@ -73,8 +73,23 @@ def transform_params(theta: np.ndarray) -> tuple:
     
     return beta1, beta2, sigma1, sigma2, p11, p22
 
-def obs_density (y_t, y_tm1, beta, sigma):
-    pass
+def obs_density(y_t: float, 
+                 y_tm1: float, 
+                 beta: float, 
+                 sigma: float) -> float:
+    """Compute the state-dependent Gaussian observation density
+
+    Args:
+        y_t (float): Observation at time t.
+        y_tm1 (float): Observation at time t-1.
+        beta (float): AR(1) coefficient for current state.
+        sigma (float): Innovation standard deviation for the current state.
+
+    Returns:
+        float: Value of f(y_t | s_t, y_t-1)
+    """
+    return 1 / (np.sqrt(2 * np.pi * sigma**2)) * \
+        np.exp(- (y_t - beta*y_tm1)**2 / (2 * sigma**2))
 
 def forward_algorithm(y, beta1, beta2, sigma1, sigma2, p11, p22, pi1):
     pass
