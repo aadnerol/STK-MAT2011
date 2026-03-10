@@ -207,6 +207,6 @@ def fit_model(y: np.ndarray, theta0: np.ndarray, method: str = "L-BFGS-B"):
     }
     return result, params_hat
 
-def filtered_probs(alpha):
+def filtered_probs(alpha: np.ndarray) -> np.ndarray:
     pass
 
