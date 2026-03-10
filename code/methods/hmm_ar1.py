@@ -173,8 +173,39 @@ def neg_loglik (theta: np.ndarray, y: np.ndarray) -> float:
     )
     return -loglik
 
-def fit_model(y, theta):
-    pass
+from scipy.optimize import minimize
+def fit_model(y: np.ndarray, theta0: np.ndarray, method: str = "L-BFGS-B"):
+    """Estimate model parameters by maximum likelihood.
+
+    Args:
+        y (np.ndarray): Observed time series.
+        theta0 (np.ndarray): Initial guess for unconstrained parameters.
+        method (str, optional): Optimization method. Defaults to "L-BFGS-B".
+
+    Returns:
+        tuple: Optimization result object and transformed parameter estimates.
+    """
+    
+    result = minimize(
+        fun=neg_loglik,
+        x0 = theta0,
+        args = (y,),
+        method=method
+    )
+    
+    beta1, beta2, sigma1, sigma2, p11, p22 = transform_params(result.x)
+    
+    params_hat = {
+        "beta1": beta1,
+        "beta2": beta2,
+        "sigma1": sigma1,
+        "sigma2": sigma2,
+        "p11": p11,
+        "p22": p22,
+        "p12": 1 - p11,
+        "p21": 1 - p22
+    }
+    return result, params_hat
 
 def filtered_probs(alpha):
     pass
