@@ -1,0 +1,208 @@
+\documentclass[11pt]{article}
+
+\usepackage{sectsty}
+\usepackage{graphicx}
+\usepackage{amsmath}
+
+% Margins
+\topmargin=-0.45in
+\evensidemargin=0in
+\oddsidemargin=0in
+\textwidth=6.5in
+\textheight=9.0in
+\headsep=0.25in
+
+\title{Generalized note on HMM with AR(1)}
+% \author{ Author }
+% \date{\today}
+
+\begin{document}
+\maketitle	
+\pagebreak
+
+% Optional TOC
+% \tableofcontents
+% \pagebreak
+
+%--Paper--
+
+\section{Introduction}
+
+Let $s_t\in \{1, 2, ..., K\}$ denote the hidden state at time $t$. The states 
+follow a first-order Markov chain with transition probabilites 
+$$
+P(s_t=j\vert s_{t-1}=i) = p_{ij},
+$$
+with transition matrix
+$$
+\begin{pmatrix}
+    p_{11} & \cdots & p_{1K}\\
+    \vdots & \ddots & \vdots \\
+    p_{K1} & \cdots & p_{KK}
+\end{pmatrix},
+$$
+where each row sum must sum to one:
+$$
+\sum_{j=1}^K p_{ij} = 1.
+$$
+The initial distribution is $\pi=(\pi_1, \ldots, \pi_K)$ with $P(s_1=i)=\pi_i$
+and $\sum_{i=1}^K \pi_i = 1$. Then, conditional on the state $s_t$, the observations
+follow a state-dependent autoregressive model, i.e.
+$$
+y_t = \beta_{s_t}y_{t-1} + \epsilon_t, 
+$$
+where $\epsilon_t \sim N(0, \sigma^2_{s_t})$. Thus the conditional distribution of
+the observation is 
+$$
+y_t \vert (s_t=i, y_{t-1}) \sim N(\beta_i y_{t-1}, \sigma^2_i),
+$$
+
+and the corresponding density is 
+$$
+f(y_t \vert s_t = i, y_{t-1}) = \frac{1}{\sqrt{2\pi \sigma^2_i}} 
+\operatorname{exp}\left(- \frac{(y_t - \beta_i y_{t-1})^2}{2\sigma^2_i}\right)
+$$
+
+\section{Likelihood}
+Now, if all states $s_{1:T}$ were observed, the likelihood would be
+$$
+L = p(s_1)\prod_{t=2}^T p(s_t \mid s_{t-1}) \prod_{t=2}^T f(y_t \mid s_t, y_{t-1}),
+$$
+and the complete-data log-likelihood is therefore
+$$
+\log L = \log p(s_1) + \sum_{t=2}^T \log p(s_t \mid s_{t-1}) + \sum_{t=2}^T \log f(y_t \mid s_t, y_{t-1}),
+$$
+with $f(y_t \mid s_t = i, y_{t-1})$ as defined above. Let $y_{1:T} = (y_1, \ldots, y_T)$ denote the observed time series and $s_t \in \{1, \ldots, K\}$ the hidden states. Since the states are unobserved, the likelihood of the data is obtained by summing over all possible state sequences:
+$$
+L = P(y_{1:T}) = \sum_{s_1=1}^K \sum_{s_2=1}^K \cdots \sum_{s_T=1}^K P(y_{1:T}, s_{1:T}),
+$$
+where
+$$
+P(y_{1:T}, s_{1:T}) = p(s_1)\prod_{t=2}^T p(s_t \mid s_{t-1}) \prod_{t=2}^T f(y_t \mid s_t, y_{t-1}),
+$$
+so the observed likelihood is
+$$
+L = \sum_{s_1=1}^K \cdots \sum_{s_T=1}^K p(s_1)\prod_{t=2}^T p(s_t \mid s_{t-1}) \prod_{t=2}^T f(y_t \mid s_t, y_{t-1}).
+$$
+
+With $K$ states this involves $K^T$ terms, which becomes computationally infeasible for large $T$.
+
+\section{Forward Algorithm}
+To compute the likelihood efficiently we introduce the forward probabilities
+$$
+\alpha_t(i) = P(y_{1:t}, s_t = i).
+$$
+This quantity represents the joint probability of observing the data up to time $t$ and being in state $i$ at time $t$. For the AR(1) observation model, we condition on the first observation $y_1$ and treat it as fixed (or assume a known $y_0$), so we initialise with
+$$
+\alpha_1(i) = \pi_i f(y_1 \mid s_1 = i, y_0).
+$$
+Then, by using the law of total probability, we have
+$$
+\alpha_t(j) = P(y_{1:t}, s_t = j) = \sum_{i=1}^K P(y_{1:t}, s_t = j, s_{t-1} = i),
+$$
+and by factorising the joint probability,
+$$
+\alpha_t(j) = \sum_{i=1}^K P(y_t \mid s_t = j, y_{t-1}) P(s_t = j \mid s_{t-1} = i) P(y_{1:t-1}, s_{t-1} = i),
+$$
+which gives the recursion
+$$
+\alpha_t(j) =\left(\sum_{i=1}^K \alpha_{t-1}(i) p_{ij} \right)\, f(y_t \mid s_t = j, y_{t-1}), \quad j \in \{1, \ldots, K\}.
+$$
+The likelihood of the observed data is obtained by marginalising over the final state:
+$$
+L = P(y_{1:T}) = \sum_{i=1}^K \alpha_T(i).
+$$
+In practice, the forward probabilities $\alpha_t(i)$ shrink exponentially in $T$, leading to numerical underflow. A standard trick is to work with the log-likelihood directly by rescaling at each step, i.e. define
+$$
+c_t = \sum_{i=1}^K \alpha_t(i), \quad \tilde{\alpha}_t(i) = \frac{\alpha_t(i)}{c_t},
+$$
+then
+$$
+\log L = \sum_{t=1}^T \log c_t.
+$$
+Now, the unknown parameters $(\beta_1, \ldots, \beta_K, \sigma_1, \ldots, \sigma_K, P, \pi)$ 
+can be found by maximising $\log L$ using numerical optimisation. 
+Note that it is advisable to use unconstrained parameterisations: 
+$\sigma_i = \exp(\eta_i)$ ensures $\sigma_i > 0$; transition probabilities 
+$p_{ij} = \exp(a_{ij}) / \sum_{l=1}^K \exp(a_{il})$ ensure $p_{ij} \in (0,1)$ 
+and that each row sums to one; and $\beta_i = (1 - \exp(-b_i))/(1 + \exp(-b_i))$ 
+ensures $\beta_i \in (-1,1)$, which corresponds to stationarity of the AR(1) 
+process in each state.
+
+\section{Filtered State Probabilites}
+Suppose we observe a sequence of data $y_1, y_2, \ldots$ sequentially. We are interested in the filtered state probabilities
+$$
+P(s_t = i \mid y_{1:t}),
+$$
+i.e. the probability of being in state $i$ given all observations up to time $t$. To estimate this, recall that $\alpha_t(i) = P(y_{1:t}, s_t = i)$. Initialise $\alpha_1(i) = \pi_i f(y_1 \mid s_1 = i, y_0)$, and then by recursion for $t \geq 2$:
+$$
+\alpha_t(j) = \sum_{i=1}^K \alpha_{t-1}(i) p_{ij} \, f(y_t \mid s_t = j, y_{t-1}), \quad j \in \{1, \ldots, K\}.
+$$
+The filtered state probabilities are obtained by normalisation:
+$$
+P(s_t = i \mid y_{1:t}) = \frac{\alpha_t(i)}{\sum_{j=1}^K \alpha_t(j)}.
+$$
+
+\section{ARIMAX, ARCH, GARCH}
+
+\begin{center}
+\textbf{Warning:} This section is generated by AI.
+\end{center}
+
+The hidden Markov model framework presented above can be extended naturally to 
+a wide class of time series models by allowing the model parameters to depend 
+on the hidden state. The key idea is that, conditional on the state $s_t = i$, 
+the observations follow a state-dependent model with parameters specific to regime $i$.
+
+\subsection{ARIMAX models}
+
+An immediate extension is to autoregressive models with exogenous variables. 
+In this case, conditional on $s_t = i$, the observations follow an ARIMAX-type model:
+$$
+y_t = c_i + \sum_{l=1}^p \phi_{l,i} y_{t-l} + \sum_{m=1}^q \theta_{m,i} 
+\varepsilon_{t-m} + \beta_i^\top x_t + \varepsilon_t,
+$$
+where $\varepsilon_t \sim N(0, \sigma_i^2)$ and $x_t$ denotes a vector of 
+exogenous variables. Each regime is thus characterised by its own set of 
+autoregressive, moving average and regression coefficients, as well as its own variance.
+
+\subsection{ARCH and GARCH models}
+
+The framework can also be extended to models with time-varying volatility. 
+In a regime-switching ARCH model, the conditional variance depends on both past 
+observations and the current state:
+$$
+y_t = \sigma_t \varepsilon_t, \quad \varepsilon_t \sim N(0,1),
+$$
+$$
+\sigma_t^2 = \alpha_{0,i} + \alpha_{1,i} y_{t-1}^2, \quad \text{if } s_t = i.
+$$
+
+Similarly, in a regime-switching GARCH model, the conditional variance follows 
+a GARCH-type recursion within each state:
+$$
+\sigma_t^2 = \alpha_{0,i} + \alpha_{1,i} y_{t-1}^2 + \beta_{1,i} \sigma_{t-1}^2, 
+\quad \text{if } s_t = i.
+$$
+
+\subsection{General formulation}
+
+More generally, the hidden Markov model framework can be written as
+$$
+y_t \mid (s_t = i, \mathcal{F}_{t-1}) \sim f(\cdot; \theta_i, \mathcal{F}_{t-1}),
+$$
+where $\mathcal{F}_{t-1}$ denotes the information set up to time $t-1$, and 
+$\theta_i$ is a set of state-dependent parameters. The choice of $f$ determines 
+the specific model, such as AR(1), ARIMAX, ARCH or GARCH.
+
+This formulation highlights that the hidden Markov model provides a flexible 
+way to capture structural changes in time series by allowing different regimes 
+to follow different dynamic models.
+
+\pagebreak
+% \section{Section 2}
+% Lorem Ipsum \\
+
+%--/Paper--
+
+\end{document}
