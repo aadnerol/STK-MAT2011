@@ -1,7 +1,7 @@
 ### HMM AR(1) code generalized to K states. ###
 
 ### Implementation of HMM AR(1) model ###
-# Two states only #
+# K hidden states #
 # Estimation with forward probabilites #
 
 import numpy as np
@@ -11,7 +11,7 @@ def simulate_rs_ar1(T: int,
                     sigma: np.ndarray, 
                     P: np.ndarray, 
                     seed: int = 42) -> tuple[np.ndarray, np.ndarray]:
-    """Generate a two-state regime-switching AR(1) process. Based on code 
+    """Generate a K-state regime-switching AR(1) process. Based on code 
     provided by advisor.
 
     Args:
@@ -24,20 +24,30 @@ def simulate_rs_ar1(T: int,
     Returns:
         tuple[np.ndarray, np.ndarray]: Simulated observations y and hidden states.
     """
+    # Assert correct dimensions:
+    assert beta.shape == sigma.shape, "Model parameter vectors have different length."
+    n, m = P.shape
+    assert n==m, "Transition matrix is not square"
+    assert n==beta.shape[0], "Transition matrix dimensions does not correspond with parameter vector length."
+    assert np.allclose(P.sum(axis=1), 1.0), "Each row of the transition matrix must sum to 1."
     # Set seed
     np.random.seed(seed)
     
+    # Set number of hidden states:
+    K = len(beta)
+    
+    # Initialize states and y 
     states = np.zeros(T, dtype=int)
     y = np.zeros(T)
     
     # Initial values:
-    states[0] = np.random.choice([0, 1])
+    states[0] = np.random.choice(K, p=np.ones(K)/K)
     y[0] = np.random.normal()
     
     for t in range(1, T):
         
         # Simulate next state
-        states[t] = np.random.choice([0, 1], p=P[states[t-1]])
+        states[t] = np.random.choice(K, p=P[states[t-1]])
         
         # Simulate observation
         s = states[t]
@@ -46,35 +56,47 @@ def simulate_rs_ar1(T: int,
     return y, states
     
 
-
-def transform_params(theta: np.ndarray) -> tuple:
+def transform_params(beta_raw: np.ndarray, 
+                     sigma_raw: np.ndarray,
+                     P_raw: np.ndarray) -> tuple:
     """Transform unconstrained parameters.
 
     Args:
-        theta (np.ndarray): Unconstrained parameter vector
-            [b1, b2, eta1, eta2, a1, a2]
+        beta_raw (np.ndarray): Unconstrained beta vector
+        sigma_raw (np.ndarray): Unconstrained sigma vector
+        P_raw (np.ndarray): Unconstrained transition matrix
 
     Returns:
-        tuple: Transformed parameters
-            (beta1, beta2, sigma1, sigma2, p11, p22)
+        tuple: 
+            beta: Transformed beta vector.
+            sigma: Transformed sigma vector.
+            P: Transformed transition matrix.
     """
+    # Assertions
+    assert beta_raw.shape == sigma_raw.shape, "Model parameter vectors have different length."
+    n, m = P_raw.shape
+    assert n==m, "Transition matrix is not square"
+    assert n==beta_raw.shape[0], "Transition matrix dimensions does not correspond with parameter vector length." 
     
-    b1, b2, eta1, eta2, a1, a2 = theta
+    K = len(beta_raw)   
+    
     
     # AR coefficients (-1, 1)
-    beta1 = (1-np.exp(-b1)) / (1+np.exp(-b1))
-    beta2 = (1-np.exp(-b2)) / (1+np.exp(-b2))
+    beta = (1-np.exp(-beta_raw)) / (1 + np.exp(-beta_raw)) 
     
     # Volatilities (>0)
-    sigma1 = np.exp(eta1)
-    sigma2 = np.exp(eta2)
+    sigma = np.exp(sigma_raw)
     
-    # Transition probabilites (0, 1)
-    p11 = 1 / (1 + np.exp(-a1))
-    p22 = 1 / (1 + np.exp(-a2))
-    
-    return beta1, beta2, sigma1, sigma2, p11, p22
+    # Transition probabilites 
+    P = np.zeros((K, K))
+    for i in range(K):
+        row = np.exp(P_raw[i])
+        P[i] = row / np.sum(row)
 
+    
+    return beta, sigma, P
+
+# kan mest sannsynlig stå som den er
 def obs_density(y_t: float, 
                  y_tm1: float, 
                  beta: float, 
@@ -93,6 +115,7 @@ def obs_density(y_t: float,
     return 1 / (np.sqrt(2 * np.pi * sigma**2)) * \
         np.exp(- (y_t - beta*y_tm1)**2 / (2 * sigma**2))
 
+# Må generaliseres
 def forward_algorithm(y: np.ndarray, 
                       beta1: float, 
                       beta2: float, 
@@ -150,7 +173,8 @@ def forward_algorithm(y: np.ndarray,
     loglik = np.sum(np.log(c))
     
     return alpha, c, loglik
- 
+
+#Enkle endringer
 def neg_loglik (theta: np.ndarray, y: np.ndarray) -> float:
     """Compute negative log-likelihood for optimization.
 
@@ -176,6 +200,8 @@ def neg_loglik (theta: np.ndarray, y: np.ndarray) -> float:
     return -loglik
 
 from scipy.optimize import minimize
+
+#moderat oppdatering
 def fit_model(y: np.ndarray, theta0: np.ndarray, method: str = "L-BFGS-B"):
     """Estimate model parameters by maximum likelihood.
 
@@ -209,6 +235,7 @@ def fit_model(y: np.ndarray, theta0: np.ndarray, method: str = "L-BFGS-B"):
     }
     return result, params_hat
 
+# Kan stå men er en teit funksjon
 def filtered_probs(alpha: np.ndarray) -> np.ndarray:
     return alpha
 
