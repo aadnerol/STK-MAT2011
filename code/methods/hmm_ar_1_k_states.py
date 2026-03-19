@@ -96,7 +96,6 @@ def transform_params(beta_raw: np.ndarray,
     
     return beta, sigma, P
 
-# kan mest sannsynlig stå som den er
 def obs_density(y_t: float, 
                  y_tm1: float, 
                  beta: float, 
@@ -115,87 +114,88 @@ def obs_density(y_t: float,
     return 1 / (np.sqrt(2 * np.pi * sigma**2)) * \
         np.exp(- (y_t - beta*y_tm1)**2 / (2 * sigma**2))
 
-# Må generaliseres
 def forward_algorithm(y: np.ndarray, 
-                      beta1: float, 
-                      beta2: float, 
-                      sigma1: float, 
-                      sigma2: float, 
-                      p11: float, 
-                      p22: float, 
-                      pi1: float = 0.5):
+                      beta: np.ndarray, 
+                      sigma: np.ndarray,                    
+                      P: np.ndarray, 
+                      pi: np.ndarray | None = None):
     """Compute scaled forward probabilities and log-likelihood
 
     Args:
-        y (np.ndarray): Observed time series.
-        beta1 (float): AR coefficient in state 0.
-        beta2 (float): AR coefficient in state 1.
-        sigma1 (float): Innovation std. deviation in state 0.
-        sigma2 (float): Innovation std. deviation in state 1.
-        p11 (float): Probability of staying in state 0.
-        p22 (float): Probability of staying in state 1. 
-        pi1 (float, optional): Initial probability of state 0. Defaults to 0.5.
+        y (np.ndarray): Observed time series
+        beta (np.ndarray): AR coefficients for each state (length K)
+        sigma (np.ndarray): Innovation standard deviations for each state (lenght K)
+        P (np.ndarray): KxK transition matrix
+        pi (np.ndarray | None, optional): Initial state distribution. 
+            Defaults to None. If None, a uniform distribution is used.
 
     Returns:
-        tuple[np.ndarray, np.ndarray, float]: Scaled forward probabilites, 
-        scaling factors, log-likelihood.
+        tuple[np.ndarray, np.ndarray, float]: Scaled forward probabilities, 
+            scaling factors and log-likelihood.
     """
+    # Assertions:
+    assert len(y) >= 1, "Observed time series y must have length at least 1"
+    assert beta.shape == sigma.shape, "Model parameter vectors have different length."
+    n, m = P.shape
+    assert n==m, "Transition matrix is not square"
+    assert n==beta.shape[0], "Transition matrix dimensions does not correspond with parameter vector length."
+    
+    K = len(beta)
+    
+    if pi is None:
+        pi = np.ones(K) / K
+    else:
+        assert pi.shape == (K,), "Initial distribution pi must have length K."
+        assert np.allclose(pi.sum(), 1.0), "Initial distribution pi must sum to 1."
+        
     T = len(y)
-    
-    p12 = 1 - p11
-    p21 = 1 - p22
-    pi2 = 1 - pi1
-    
-    alpha = np.zeros((T, 2))
+    alpha = np.zeros((T, K))
     c = np.zeros(T)
     
     # Initial step
-    f1 = obs_density(y[0], 0.0, beta1, sigma1)
-    f2 = obs_density(y[0], 0.0, beta2, sigma2)
+    for i in range(K):
+        alpha[0, i] = pi[i] * obs_density(y[0], 0.0, beta[i], sigma[i])
     
-    alpha[0, 0] = pi1 * f1
-    alpha[0, 1] = pi2 * f2
     
-    c[0] = alpha[0, 0] + alpha[0, 1]
+    c[0] = np.sum(alpha[0, :])
     alpha[0, :] /= c[0]
     
     # Recursion
     for t in range(1, T):
-        f1 = obs_density(y[t], y[t-1], beta1, sigma1)
-        f2 = obs_density(y[t], y[t-1], beta2, sigma2)
+        for j in range(K):
+            f_j = obs_density(y[t], y[t-1], beta[j], sigma[j])
+            alpha[t, j] = np.sum(alpha[t-1, :] * P[:, j]) * f_j
         
-        alpha[t, 0] = (alpha[t-1, 0] * p11 + alpha[t-1, 1] * p21) * f1
-        alpha[t, 1] = (alpha[t-1, 0] * p12 + alpha[t-1, 1] * p22) * f2
-        
-        c[t] = alpha[t, 0] + alpha[t, 1]
+        c[t] = np.sum(alpha[t, :])
         alpha[t, :] /= c[t]
     
     loglik = np.sum(np.log(c))
     
     return alpha, c, loglik
 
-#Enkle endringer
-def neg_loglik (theta: np.ndarray, y: np.ndarray) -> float:
+def neg_loglik (beta: np.ndarray, 
+                sigma: np.ndarray, 
+                P: np.ndarray,
+                y: np.ndarray) -> float:
     """Compute negative log-likelihood for optimization.
 
     Args:
-        theta (np.ndarray): Unconstrained parameter vector.
-        y (np.ndarray): Observed time series.
+        beta (np.ndarray): Unconstrained beta vector. 
+        sigma (np.ndarray): Unconstrained sigma vector.
+        P (np.ndarray): Unconstrained transition matrix.
+        y (np.ndarray): Observed time series. 
 
     Returns:
-        float: Negative log-likelihood.
+        float: Negative log-likelihood. 
     """
-    beta1, beta2, sigma1, sigma2, p11, p22 = transform_params(theta)
+    beta, sigma, P = transform_params(beta, sigma, P)
     
     alpha_local, c_local, loglik = forward_algorithm(
         y=y,
-        beta1=beta1,
-        beta2=beta2,
-        sigma1=sigma1,
-        sigma2=sigma2,
-        p11=p11,
-        p22=p22,
-        pi1=0.5
+        beta=beta,
+        sigma=sigma,
+        P = P,
+        pi = None
     )
     return -loglik
 
