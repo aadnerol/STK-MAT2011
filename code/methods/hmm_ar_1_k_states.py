@@ -173,7 +173,7 @@ def forward_algorithm(y: np.ndarray,
     
     return alpha, c, loglik
 
-def neg_loglik (beta: np.ndarray, 
+def neg_loglik(beta: np.ndarray, 
                 sigma: np.ndarray, 
                 P: np.ndarray,
                 y: np.ndarray) -> float:
