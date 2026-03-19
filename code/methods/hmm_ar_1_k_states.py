@@ -124,7 +124,7 @@ def forward_algorithm(y: np.ndarray,
     Args:
         y (np.ndarray): Observed time series
         beta (np.ndarray): AR coefficients for each state (length K)
-        sigma (np.ndarray): Innovation standard deviations for each state (lenght K)
+        sigma (np.ndarray): Innovation standard deviations for each state (length K)
         P (np.ndarray): KxK transition matrix
         pi (np.ndarray | None, optional): Initial state distribution. 
             Defaults to None. If None, a uniform distribution is used.
@@ -202,37 +202,52 @@ def neg_loglik (beta: np.ndarray,
 from scipy.optimize import minimize
 
 #moderat oppdatering
-def fit_model(y: np.ndarray, theta0: np.ndarray, method: str = "L-BFGS-B"):
+def fit_model(y: np.ndarray, 
+              beta0: np.ndarray, 
+              sigma0: np.ndarray,
+              P0: np.ndarray,
+              method: str = "L-BFGS-B"):
     """Estimate model parameters by maximum likelihood.
 
     Args:
         y (np.ndarray): Observed time series.
-        theta0 (np.ndarray): Initial guess for unconstrained parameters.
+        beta0 (np.ndarray): Initial guess for unconstrained beta.
+        sigma0 (np.ndarray): Initial guess for unconstrained sigma.
+        P0 (np.ndarray): Initial guess for unconstrained transition matrix.
         method (str, optional): Optimization method. Defaults to "L-BFGS-B".
 
     Returns:
         tuple: Optimization result object and transformed parameter estimates.
     """
+    K = len(beta0)
+    
+    theta0 = np.concatenate([beta0, sigma0, P0.ravel()])
+    
+    def objective(theta):
+        beta_raw = theta[:K]
+        sigma_raw = theta[K:2*K]
+        P_raw = theta[2*K:].reshape(K, K)
+
+        return neg_loglik(beta_raw, sigma_raw, P_raw, y)
     
     result = minimize(
-        fun=neg_loglik,
+        fun=objective,
         x0 = theta0,
-        args = (y,),
         method=method
     )
     
-    beta1, beta2, sigma1, sigma2, p11, p22 = transform_params(result.x)
-    
+    beta_raw_hat = result.x[:K]
+    sigma_raw_hat = result.x[K:2*K]
+    P_raw_hat = result.x[2*K:].reshape(K, K)
+
+    beta_hat, sigma_hat, P_hat = transform_params(beta_raw_hat, sigma_raw_hat, P_raw_hat)
+
     params_hat = {
-        "beta1": beta1,
-        "beta2": beta2,
-        "sigma1": sigma1,
-        "sigma2": sigma2,
-        "p11": p11,
-        "p22": p22,
-        "p12": 1 - p11,
-        "p21": 1 - p22
+        "beta": beta_hat,
+        "sigma": sigma_hat,
+        "P": P_hat
     }
+
     return result, params_hat
 
 # Kan stå men er en teit funksjon
