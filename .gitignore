@@ -231,3 +231,6 @@ pyrightconfig.json
 oblig/data/*
 !oblig/data/README.md
 code/data/raw_data*
+
+# Copilot instructions
+.github/copilot-instructions.md
