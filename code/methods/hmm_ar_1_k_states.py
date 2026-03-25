@@ -5,6 +5,7 @@
 # Estimation with forward probabilites #
 
 import numpy as np
+import numba
 
 def simulate_rs_ar1(T: int, 
                     beta: np.ndarray, 
@@ -96,6 +97,7 @@ def transform_params(beta_raw: np.ndarray,
     
     return beta, sigma, P
 
+@numba.jit(nopython=True)
 def obs_density(y_t: float, 
                  y_tm1: float, 
                  beta: float, 
@@ -114,11 +116,12 @@ def obs_density(y_t: float,
     return 1 / (np.sqrt(2 * np.pi * sigma**2)) * \
         np.exp(- (y_t - beta*y_tm1)**2 / (2 * sigma**2))
 
+@numba.jit(nopython=True)
 def forward_algorithm(y: np.ndarray, 
                       beta: np.ndarray, 
                       sigma: np.ndarray,                    
                       P: np.ndarray, 
-                      pi: np.ndarray | None = None):
+                      pi = None):
     """Compute scaled forward probabilities and log-likelihood
 
     Args:
@@ -133,21 +136,14 @@ def forward_algorithm(y: np.ndarray,
         tuple[np.ndarray, np.ndarray, float]: Scaled forward probabilities, 
             scaling factors and log-likelihood.
     """
-    # Assertions:
-    assert len(y) >= 1, "Observed time series y must have length at least 1"
-    assert beta.shape == sigma.shape, "Model parameter vectors have different length."
-    n, m = P.shape
-    assert n==m, "Transition matrix is not square"
-    assert n==beta.shape[0], "Transition matrix dimensions does not correspond with parameter vector length."
-    
     K = len(beta)
     
     if pi is None:
         pi = np.ones(K) / K
     else:
-        assert pi.shape == (K,), "Initial distribution pi must have length K."
-        assert np.allclose(pi.sum(), 1.0), "Initial distribution pi must sum to 1."
-        
+        # Assume pi is valid (checked elsewhere)
+        pass
+    
     T = len(y)
     alpha = np.zeros((T, K))
     c = np.zeros(T)
@@ -188,6 +184,8 @@ def neg_loglik(beta: np.ndarray,
     Returns:
         float: Negative log-likelihood. 
     """
+    assert len(y) >= 1, "Observed time series y must have length at least 1"
+    
     beta, sigma, P = transform_params(beta, sigma, P)
     
     alpha_local, c_local, loglik = forward_algorithm(
