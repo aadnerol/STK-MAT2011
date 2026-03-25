@@ -221,6 +221,9 @@ def fit_model(y: np.ndarray,
     
     theta0 = np.concatenate([beta0, sigma0, P0.ravel()])
     
+    # Bounds to prevent numerical issues: sigma_raw > -10 to avoid exp(sigma_raw) ≈ 0
+    bounds = [(-np.inf, np.inf)] * K + [(-10, np.inf)] * K + [(-np.inf, np.inf)] * (K * K)
+    
     def objective(theta):
         beta_raw = theta[:K]
         sigma_raw = theta[K:2*K]
@@ -231,6 +234,7 @@ def fit_model(y: np.ndarray,
     result = minimize(
         fun=objective,
         x0 = theta0,
+        bounds=bounds,
         method=method
     )
     
@@ -251,4 +255,5 @@ def fit_model(y: np.ndarray,
 # Kan stå men er en teit funksjon
 def filtered_probs(alpha: np.ndarray) -> np.ndarray:
     return alpha
+
 
