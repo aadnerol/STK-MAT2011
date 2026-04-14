@@ -63,7 +63,40 @@ def average_interval_width(lower, upper):
     return np.mean(upper[mask] - lower[mask])
 
 
-def evaluate_predictions(y_true, pred_mean, lower, upper):
+def interval_score(y_true, lower, upper, alpha=0.05):
+    """Compute the mean interval score (Gneiting & Raftery, 2007).
+
+    A strictly proper scoring rule for prediction intervals. Lower is better.
+    Penalizes wide intervals and observations outside the interval.
+
+    IS = (u - l) + (2/alpha) * (l - y) * 1(y < l)
+                 + (2/alpha) * (y - u) * 1(y > u)
+
+    Parameters
+    ----------
+    y_true : array-like
+    lower : array-like
+    upper : array-like
+    alpha : float
+        Significance level matching the interval. Default 0.05 for 95% intervals.
+
+    Returns
+    -------
+    float
+        Mean interval score across all observations.
+    """
+    y_true = np.asarray(y_true)
+    lower = np.asarray(lower)
+    upper = np.asarray(upper)
+
+    width = upper - lower
+    penalty_low = (2 / alpha) * np.maximum(lower - y_true, 0)
+    penalty_high = (2 / alpha) * np.maximum(y_true - upper, 0)
+
+    return np.mean(width + penalty_low + penalty_high)
+
+
+def evaluate_predictions(y_true, pred_mean, lower, upper, alpha=0.5):
     """Compute RMSE, empirical coverage, and average interval width.
 
     Parameters
@@ -81,6 +114,7 @@ def evaluate_predictions(y_true, pred_mean, lower, upper):
         "rmse": compute_rmse(y_true, pred_mean),
         "coverage": empirical_coverage(y_true, lower, upper),
         "avg_width": average_interval_width(lower, upper),
+        "interval_score": interval_score(y_true, lower, upper, alpha=alpha),
     }
 
 
