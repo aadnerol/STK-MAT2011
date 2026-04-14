@@ -85,7 +85,7 @@ def filter_day(df: pd.DataFrame, day: str) -> pd.DataFrame:
 
     day = pd.to_datetime(day).date()
 
-    return df[df["datetime"].dt.date == day]
+    return df[df.index.date == day]
 
 
 
