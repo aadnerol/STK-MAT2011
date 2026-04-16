@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.stats import norm
-from methods.hmm_ar_1_k_states import fit_model, forward_algorithm
+from methods.hmm_ar_1_k_states import fit_model, forward_algorithm, \
+    transform_params
 
 
 # ---------------------------------------------------------------------------
@@ -377,3 +378,70 @@ def predict_hmm_mixture(y_train, y_test, params_hat, alpha=0.05):
         prev_y = y_obs
 
     return pred_mean, lower, upper
+
+
+def fit_hmm_multiday(segments, K, n_starts=10, seed=123):
+    """Fit a K-state HMM-AR(1) by summing log-likelihoods across independent segments.
+
+    Each segment is treated as independent (e.g. one trading day).
+    Total log-likelihood = sum of per-segment log-likelihoods.
+
+    Parameters
+    ----------
+    segments : list of array-like
+    K : int
+    n_starts : int
+    seed : int
+
+    Returns
+    -------
+    result : OptimizeResult
+    params_hat : dict with keys 'beta', 'sigma', 'P'
+    """
+    from scipy.optimize import minimize
+
+    rng = np.random.default_rng(seed)
+    segs = [np.asarray(s, dtype=float) for s in segments]
+    best_result = None
+    best_params = None
+    best_loglik = -np.inf
+
+    def objective(theta):
+        beta_raw = theta[:K]
+        sigma_raw = theta[K:2 * K]
+        P_raw = theta[2 * K:].reshape(K, K)
+        beta, sigma, P = transform_params(beta_raw, sigma_raw, P_raw)
+        total = 0.0
+        for seg in segs:
+            _, _, ll = forward_algorithm(seg, beta, sigma, P, pi=None)
+            total += ll
+        return -total
+
+    bounds = (
+        [(-np.inf, np.inf)] * K
+        + [(-10, np.inf)] * K
+        + [(-np.inf, np.inf)] * (K * K)
+    )
+
+    for _ in range(n_starts):
+        beta0 = rng.normal(0.0, 0.5, size=K)
+        sigma0 = rng.normal(0.0, 0.3, size=K)
+        P0 = rng.normal(0.0, 0.5, size=(K, K))
+        theta0 = np.concatenate([beta0, sigma0, P0.ravel()])
+        try:
+            result = minimize(objective, theta0, bounds=bounds, method="L-BFGS-B")
+            loglik = -result.fun
+            if result.success and np.isfinite(loglik) and loglik > best_loglik:
+                best_result = result
+                best_loglik = loglik
+                b_hat, s_hat, P_hat = transform_params(
+                    result.x[:K], result.x[K:2*K], result.x[2*K:].reshape(K, K)
+                )
+                best_params = {"beta": b_hat, "sigma": s_hat, "P": P_hat}
+        except Exception:
+            pass
+
+    if best_params is None:
+        raise RuntimeError("HMM fitting failed for all random starts.")
+
+    return best_result, best_params
