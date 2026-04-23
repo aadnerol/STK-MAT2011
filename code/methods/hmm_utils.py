@@ -410,12 +410,20 @@ def fit_hmm_multiday(segments, K, n_starts=10, seed=123):
         beta_raw = theta[:K]
         sigma_raw = theta[K:2 * K]
         P_raw = theta[2 * K:].reshape(K, K)
-        beta, sigma, P = transform_params(beta_raw, sigma_raw, P_raw)
-        total = 0.0
-        for seg in segs:
-            _, _, ll = forward_algorithm(seg, beta, sigma, P, pi=None)
-            total += ll
-        return -total
+        try:
+            beta, sigma, P = transform_params(beta_raw, sigma_raw, P_raw)
+            if not (np.all(np.isfinite(beta)) and np.all(np.isfinite(sigma)) and np.all(np.isfinite(P))):
+                return 1e10
+            total = 0.0
+            for seg in segs:
+                _, _, ll = forward_algorithm(seg, beta, sigma, P, pi=None)
+                if not np.isfinite(ll):
+                    return 1e10
+                total += ll
+            return -total
+        except Exception:
+            return 1e10
+
 
     bounds = (
         [(-np.inf, np.inf)] * K
