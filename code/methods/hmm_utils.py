@@ -216,6 +216,9 @@ def fit_hmm_robust(y, K, n_starts=10, seed=123):
     RuntimeError
         If all optimization runs fail.
     """
+    y_arr = np.asarray(y, dtype=float)
+    sigma0_center = np.log(np.std(y_arr) + 1e-6)
+
     rng = np.random.default_rng(seed)
     best_result = None
     best_params = None
@@ -223,13 +226,13 @@ def fit_hmm_robust(y, K, n_starts=10, seed=123):
 
     for _ in range(n_starts):
         beta0 = rng.normal(0.0, 0.5, size=K)
-        sigma0 = rng.normal(0.0, 0.3, size=K)
+        sigma0 = sigma0_center + rng.normal(0.0, 0.5, size=K)
         P0 = rng.normal(0.0, 0.5, size=(K, K))
 
         try:
-            result, params_hat = fit_model(y, beta0, sigma0, P0)
+            result, params_hat = fit_model(y_arr, beta0, sigma0, P0)
             loglik = -result.fun
-            if np.isfinite(loglik) and loglik > best_loglik:
+            if np.isfinite(loglik) and result.fun < 1e9 and loglik > best_loglik:
                 best_result = result
                 best_params = params_hat
                 best_loglik = loglik
@@ -402,6 +405,7 @@ def fit_hmm_multiday(segments, K, n_starts=10, seed=123):
 
     rng = np.random.default_rng(seed)
     segs = [np.asarray(s, dtype=float) for s in segments]
+    sigma0_center = np.log(np.std(np.concatenate(segs)) + 1e-6)
     best_result = None
     best_params = None
     best_loglik = -np.inf
@@ -433,7 +437,7 @@ def fit_hmm_multiday(segments, K, n_starts=10, seed=123):
 
     for _ in range(n_starts):
         beta0 = rng.normal(0.0, 0.5, size=K)
-        sigma0 = rng.normal(0.0, 0.3, size=K)
+        sigma0 = sigma0_center + rng.normal(0.0, 0.5, size=K)
         P0 = rng.normal(0.0, 0.5, size=(K, K))
         theta0 = np.concatenate([beta0, sigma0, P0.ravel()])
         try:

@@ -228,8 +228,11 @@ def fit_model(y: np.ndarray,
         beta_raw = theta[:K]
         sigma_raw = theta[K:2*K]
         P_raw = theta[2*K:].reshape(K, K)
-
-        return neg_loglik(beta_raw, sigma_raw, P_raw, y)
+        try:
+            val = neg_loglik(beta_raw, sigma_raw, P_raw, y)
+            return val if np.isfinite(val) else 1e10
+        except Exception:
+            return 1e10
     
     result = minimize(
         fun=objective,
