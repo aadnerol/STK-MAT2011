@@ -53,7 +53,13 @@ def pre_avg(df: pd.DataFrame,
     df = df.copy()
     
     if tick:
-        df["pre_avg"] = df[column].rolling(window=k).mean()
+        block = np.arange(len(df)) // k
+        df = df.reset_index()
+        df["block"] = block
+        df["pre_avg"] = df.groupby("block")[column].transform("mean")
+        df = df.groupby("block").last().reset_index(drop=True)
+        df = df.set_index("datetime")
+
     else:
         df[time_col] = pd.to_datetime(df[time_col]) 
         
