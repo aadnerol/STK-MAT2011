@@ -61,17 +61,13 @@ def pre_avg(df: pd.DataFrame,
         df = df.set_index("datetime")
 
     else:
-        df[time_col] = pd.to_datetime(df[time_col]) 
-        
         df = df.set_index(time_col)
-        
-        df["pre_avg"] = (
-            df[column]
-            .resample(f"{time_interval_ms}ms")
-            .transform("mean")
+        df = (
+            df.resample(f"{time_interval_ms}ms")
+            .mean()
         )
+        df = df.rename(columns={column: "pre_avg"})
 
-        df = df.reset_index()
     
     df = df.dropna(subset =["pre_avg"])   
     return df
