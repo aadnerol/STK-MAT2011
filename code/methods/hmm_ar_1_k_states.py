@@ -117,56 +117,89 @@ def obs_density(y_t: float,
         np.exp(- (y_t - beta*y_tm1)**2 / (2 * sigma**2))
 
 @numba.jit(nopython=True)
-def forward_algorithm(y: np.ndarray, 
-                      beta: np.ndarray, 
-                      sigma: np.ndarray,                    
-                      P: np.ndarray, 
-                      pi = None):
-    """Compute scaled forward probabilities and log-likelihood
+def log_obs_density(y_t, y_tm1, beta, sigma):
+    residual = y_t - beta * y_tm1
+    return -0.5 * np.log(2.0 * np.pi * sigma ** 2) - 0.5 * (residual / sigma) ** 2
 
-    Args:
-        y (np.ndarray): Observed time series
-        beta (np.ndarray): AR coefficients for each state (length K)
-        sigma (np.ndarray): Innovation standard deviations for each state (length K)
-        P (np.ndarray): KxK transition matrix
-        pi (np.ndarray | None, optional): Initial state distribution. 
-            Defaults to None. If None, a uniform distribution is used.
+
+@numba.jit(nopython=True)
+def forward_algorithm(y: np.ndarray,
+                      beta: np.ndarray,
+                      sigma: np.ndarray,
+                      P: np.ndarray,
+                      pi=None):
+    """Compute forward probabilities and log-likelihood in log-space.
+
+    Numerically stable: avoids underflow for extreme observation scales.
+    All log-sum-exp operations are inlined as scalar loops (no numpy array
+    temporaries inside the hot path) and log(P) is precomputed once.
+    The second return value (c) is a dummy kept for API compatibility.
 
     Returns:
-        tuple[np.ndarray, np.ndarray, float]: Scaled forward probabilities, 
-            scaling factors and log-likelihood.
+        tuple[np.ndarray, np.ndarray, float]: Normalized forward probabilities (T×K),
+            dummy ones array, and log-likelihood.
     """
     K = len(beta)
-    
+    T = len(y)
+
     if pi is None:
         pi = np.ones(K) / K
-    else:
-        # Assume pi is valid (checked elsewhere)
-        pass
-    
-    T = len(y)
-    alpha = np.zeros((T, K))
-    c = np.zeros(T)
-    
+
+    # Precompute log(P) once — avoids K*K*T log() calls inside the hot loop
+    log_P = np.empty((K, K))
+    for i in range(K):
+        for j in range(K):
+            log_P[i, j] = np.log(P[i, j] + 1e-300)
+
+    log_alpha = np.empty((T, K))
+    loglik = 0.0
+
     # Initial step
     for i in range(K):
-        alpha[0, i] = pi[i] * obs_density(y[0], 0.0, beta[i], sigma[i])
-    
-    
-    c[0] = np.sum(alpha[0, :])
-    alpha[0, :] /= c[0]
-    
+        log_alpha[0, i] = np.log(pi[i]) + log_obs_density(y[0], 0.0, beta[i], sigma[i])
+
+    # Inline log-sum-exp (scalar, no array temporaries)
+    max_val = log_alpha[0, 0]
+    for i in range(1, K):
+        if log_alpha[0, i] > max_val:
+            max_val = log_alpha[0, i]
+    s = 0.0
+    for i in range(K):
+        s += np.exp(log_alpha[0, i] - max_val)
+    log_c = max_val + np.log(s)
+    loglik += log_c
+    for i in range(K):
+        log_alpha[0, i] -= log_c
+
     # Recursion
     for t in range(1, T):
         for j in range(K):
-            f_j = obs_density(y[t], y[t-1], beta[j], sigma[j])
-            alpha[t, j] = np.sum(alpha[t-1, :] * P[:, j]) * f_j
-        
-        c[t] = np.sum(alpha[t, :])
-        alpha[t, :] /= c[t]
-    
-    loglik = np.sum(np.log(c))
-    
+            # Inline log-sum-exp over incoming transitions
+            max_val = log_alpha[t-1, 0] + log_P[0, j]
+            for i in range(1, K):
+                v = log_alpha[t-1, i] + log_P[i, j]
+                if v > max_val:
+                    max_val = v
+            s = 0.0
+            for i in range(K):
+                s += np.exp(log_alpha[t-1, i] + log_P[i, j] - max_val)
+            log_alpha[t, j] = max_val + np.log(s) + log_obs_density(y[t], y[t-1], beta[j], sigma[j])
+
+        # Inline log-sum-exp for normalisation
+        max_val = log_alpha[t, 0]
+        for j in range(1, K):
+            if log_alpha[t, j] > max_val:
+                max_val = log_alpha[t, j]
+        s = 0.0
+        for j in range(K):
+            s += np.exp(log_alpha[t, j] - max_val)
+        log_c = max_val + np.log(s)
+        loglik += log_c
+        for j in range(K):
+            log_alpha[t, j] -= log_c
+
+    alpha = np.exp(log_alpha)
+    c = np.ones(T)
     return alpha, c, loglik
 
 def neg_loglik(beta: np.ndarray, 
